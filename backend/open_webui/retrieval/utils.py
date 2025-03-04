@@ -1,7 +1,7 @@
 import logging
 import os
 import uuid
-from typing import Optional, Union
+from typing import Dict, List, Optional, Union
 
 import asyncio
 import requests
@@ -357,9 +357,13 @@ def get_sources_from_files(
     relevant_contexts = []
 
     for file in files:
-
         context = None
-        if file.get("docs"):
+        meta = file.get("meta")
+        
+        if meta is not None and meta.get("type") == "azure_search":
+            log.debug(f"Azure Search: {file}")
+            context =azure_cognitive_search(queries[0], file)
+        elif file.get("docs"):
             # BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL
             context = {
                 "documents": [[doc.get("content") for doc in file.get("docs")]],
@@ -640,6 +644,124 @@ def generate_embeddings(engine: str, model: str, text: Union[str, list[str]], **
             embeddings = generate_openai_batch_embeddings(model, [text], url, key, user)
 
         return embeddings[0] if isinstance(text, str) else embeddings
+
+def list_azure_search_indexes():
+    """
+    List all indexes in Azure Cognitive Search - matching your curl command format
+    """
+    # Ensure URL ends with no trailing slash
+    endpoint = os.environ.get("AZURE_SEARCH_ENDPOINT").rstrip('/')
+    url = f"{endpoint}/indexes?api-version={os.environ.get('AZURE_SEARCH_API_VERSION')}"
+    
+    headers = {
+        "Content-Type": "application/json",
+        "api-key": os.environ.get("AZURE_SEARCH_API_KEY")
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            indexes = response.json().get("value", [])
+            index_names = [index.get("name") for index in indexes]
+            log.debug(f"Available indexes: {', '.join(index_names)}")
+            return index_names
+        else:
+            log.error(f"Error listing indexes: HTTP {response.status_code} - {response.text}")
+            return []
+            
+    except Exception as e:
+        log.error(f"Error listing indexes: {str(e)}")
+        return []
+
+def azure_cognitive_search(query: str, file: dict) -> List[Dict[str, Any]]:
+    """
+    Search an Azure Cognitive Search index
+    """
+    index_name = file.get("name")
+    documents = []
+    metadata = []
+
+    # Try multiple search approaches in case of failure
+    for attempt in range(2):
+        try:
+            # Ensure URL ends with no trailing slash - exactly matching your working curl format
+            endpoint = os.environ.get("AZURE_SEARCH_ENDPOINT").rstrip('/')
+            url = f"{endpoint}/indexes/{index_name}/docs/search?api-version={os.environ.get('AZURE_SEARCH_API_VERSION')}"
+            
+            headers = {
+                "Content-Type": "application/json",
+                "api-key": os.environ.get("AZURE_SEARCH_API_KEY")
+            }
+            
+            # For second attempt, try a simpler query if first fails
+            if attempt == 1:
+                log.debug(f"Retrying with basic search for index {index_name}")
+                payload = {
+                    "search": query,
+                    "top": int(os.environ.get("AZURE_SEARCH_TOP_K", 5))
+                }
+            else:
+                # Basic search payload
+                payload = {
+                    "search": query,
+                    "top": int(os.environ.get("AZURE_SEARCH_TOP_K", 5)),
+                    "count": True
+                }
+                
+                # Add semantic search only if explicitly enabled
+                semantic_search = os.getenv("AZURE_SEARCH_USE_SEMANTIC", "False").lower() == "true"
+                if semantic_search:
+                    payload.update({
+                        "queryType": "semantic",
+                        "semanticConfiguration": "default",
+                        "captions": "extractive",
+                        "answers": "extractive"
+                    })
+            
+            response = requests.post(url, headers=headers, json=payload, timeout=10)
+            
+            # Check if we received a successful response
+            if response.status_code == 200:
+                results = response.json()
+                
+                # Process search results into the expected format
+                for item in results.get("value", []):
+                    # Extract content - assuming there's a content field, adjust as needed
+                    content = item.get("chunk", "")
+                    documents.append(content)
+
+                    title = item.get("title", "Unknown")
+                    metadata.append({"source": title, 
+                                      "title": title})
+                # If successful, break out of retry loop
+                break
+            else:
+                # Log the error but continue to next attempt or index
+                error_detail = response.text[:200] + "..." if len(response.text) > 200 else response.text
+                log.error(f"Error searching index {index_name} (HTTP {response.status_code}): {error_detail}")
+                
+                # Only retry if this was the first attempt
+                if attempt == 0:
+                    continue
+                else:
+                    break
+        
+        except Exception as e:
+            log.error(f"Error searching index {index_name}: {str(e)}")
+            
+            # Only retry if this was the first attempt
+            if attempt == 0:
+                continue
+            else:
+                break
+    
+    # Return in the expected format
+    return {
+        "file": file,
+        "documents":[documents],
+        "metadatas": [metadata]
+    }
 
 
 import operator

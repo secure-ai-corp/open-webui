@@ -1,0 +1,52 @@
+{
+  "hr_policies": [
+    "HR_Admins", 
+    "HR_Staff", 
+    "Executive_Team"
+  ],
+  
+  "finance_data": [
+    "Finance_Team", 
+    "Accounting", 
+    "Executive_Team"
+  ],
+  
+  "engineering_docs": [
+    "Engineering", 
+    "DevOps", 
+    "QA_Team"
+  ],
+  
+  "security_policies": [
+    "Security_Team", 
+    "IT_Admins", 
+    "Compliance"
+  ],
+  
+  "legal_documents": [
+    "Legal_Team", 
+    "Compliance", 
+    "Executive_Team"
+  ],
+  
+  "product_documentation": [
+    "Product_Team", 
+    "Engineering", 
+    "Sales", 
+    "Customer_Support"
+  ],
+  
+  "customer_data": [
+    "Sales", 
+    "Customer_Support", 
+    "Account_Managers"
+  ],
+  
+  "public_knowledge_base": [
+    "Everyone"
+  ],
+  
+  "executive_reports": [
+    "Executive_Team"
+  ]
+}

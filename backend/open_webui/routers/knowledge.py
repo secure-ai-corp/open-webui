@@ -1,7 +1,11 @@
+import time
 from typing import List, Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 import logging
+import json
+import os
+from pathlib import Path
 
 from open_webui.models.knowledge import (
     Knowledges,
@@ -11,6 +15,7 @@ from open_webui.models.knowledge import (
 )
 from open_webui.models.files import Files, FileModel
 from open_webui.retrieval.vector.connector import VECTOR_DB_CLIENT
+from open_webui.retrieval.utils import list_azure_search_indexes
 from open_webui.routers.retrieval import (
     process_file,
     ProcessFileForm,
@@ -24,8 +29,9 @@ from open_webui.utils.auth import get_verified_user
 from open_webui.utils.access_control import has_access, has_permission
 
 
-from open_webui.env import SRC_LOG_LEVELS
+from open_webui.env import BASE_DIR, SRC_LOG_LEVELS
 from open_webui.models.models import Models, ModelForm
+from open_webui.models.groups import Groups
 
 
 log = logging.getLogger(__name__)
@@ -37,6 +43,53 @@ router = APIRouter()
 # getKnowledgeBases
 ############################
 
+def get_filtered_azure_indexes(user):
+    """
+    Filter Azure Search indexes based on user group membership.
+    Admin users have access to all indexes.
+    """
+    # Get all available indexes
+    azure_indexes = list_azure_search_indexes()
+    
+    # Admin users have access to all indexes
+    if user.role == "admin":
+        return azure_indexes
+    
+    # Try to load the mappings file
+    mappings_file = Path(BASE_DIR / os.environ.get("AZURE_INDEX_GROUP_MAPPINGS"))
+    if not mappings_file.exists():
+        # If file doesn't exist, return empty list (no access)
+        log.warning("index-group-mappings.json file not found, restricting access to all indexes")
+        return []
+    
+    try:
+        with open(mappings_file, "r") as f:
+            index_mappings = json.load(f)
+    except Exception as e:
+        log.error(f"Error loading index-group-mappings.json: {str(e)}")
+        return []
+    
+    # Get user's groups using the Groups model
+    user_groups = []
+    user_group_objects = Groups.get_groups_by_member_id(user.id)
+    if user_group_objects:
+        user_groups = [group.name for group in user_group_objects]
+    
+    # Filter indexes based on group membership
+    allowed_indexes = []
+    for index in azure_indexes:
+        # If index is not in mappings, skip it
+        if index not in index_mappings:
+            continue
+            
+        # Get groups that can access this index
+        allowed_groups = index_mappings[index]
+        
+        # Check if user is in any of the allowed groups
+        if any(group in user_groups for group in allowed_groups):
+            allowed_indexes.append(index)
+    
+    return allowed_indexes
 
 @router.get("/", response_model=list[KnowledgeUserResponse])
 async def get_knowledge(user=Depends(get_verified_user)):
@@ -82,6 +135,23 @@ async def get_knowledge(user=Depends(get_verified_user)):
                 files=files,
             )
         )
+
+    # Get Azure Search indexes and create synthetic knowledge bases
+    azure_indexes = get_filtered_azure_indexes(user)
+    for index in azure_indexes:
+        azure_kb = KnowledgeUserResponse(
+            id=f"__azure-search__{index}",
+            name=index,
+            description=f"Azure Search Index {index}",
+            user_id=f"{user.id}",
+            created_at=int(time.time()),
+            updated_at=int(time.time()),
+            meta={
+                "type": "azure_search"
+            },
+            files=[],
+        )
+        knowledge_with_files.append(azure_kb)
 
     return knowledge_with_files
 
