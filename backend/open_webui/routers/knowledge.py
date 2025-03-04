@@ -56,7 +56,7 @@ def get_filtered_azure_indexes(user):
         return azure_indexes
     
     # Try to load the mappings file
-    mappings_file = Path(BASE_DIR / os.environ.get("AZURE_INDEX_GROUP_MAPPINGS"))
+    mappings_file = Path(os.environ.get("AZURE_INDEX_GROUP_MAPPINGS"))
     if not mappings_file.exists():
         # If file doesn't exist, return empty list (no access)
         log.warning("index-group-mappings.json file not found, restricting access to all indexes")
