@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Open WebUI",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "open_webui.main:app",
+                "--port", "8080",
+                "--host", "0.0.0.0",
+                "--forwarded-allow-ips", "*",
+                "--reload"
+            ],
+            "jinja": true,
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}/backend",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/backend"
+            },
+            "python": "${workspaceFolder}/backend/.venv/bin/python"
+        }
+    ]
+}

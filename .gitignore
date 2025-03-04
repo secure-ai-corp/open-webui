@@ -1,3 +1,4 @@
+*~
 .DS_Store
 node_modules
 /build
@@ -12,6 +13,8 @@ vite.config.ts.timestamp-*
 __pycache__/
 *.py[cod]
 *$py.class
+mise.toml
+*.code-workspace
 
 # C extensions
 *.so
