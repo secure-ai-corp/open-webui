@@ -137,21 +137,22 @@ async def get_knowledge(user=Depends(get_verified_user)):
         )
 
     # Get Azure Search indexes and create synthetic knowledge bases
-    azure_indexes = get_filtered_azure_indexes(user)
-    for index in azure_indexes:
-        azure_kb = KnowledgeUserResponse(
-            id=f"__azure-search__{index}",
-            name=index,
-            description=f"Azure Search Index {index}",
-            user_id=f"{user.id}",
-            created_at=int(time.time()),
-            updated_at=int(time.time()),
-            meta={
-                "type": "azure_search"
-            },
-            files=[],
-        )
-        knowledge_with_files.append(azure_kb)
+    if os.environ.get("AZURE_SEARCH_ENABLED", False):
+        azure_indexes = get_filtered_azure_indexes(user)
+        for index in azure_indexes:
+            azure_kb = KnowledgeUserResponse(
+                id=f"__azure-search__{index}",
+                name=index,
+                description=f"Azure Search Index {index}",
+                user_id=f"{user.id}",
+                created_at=int(time.time()),
+                updated_at=int(time.time()),
+                meta={
+                    "type": "azure_search"
+                },
+                files=[],
+            )
+            knowledge_with_files.append(azure_kb)
 
     return knowledge_with_files
 
