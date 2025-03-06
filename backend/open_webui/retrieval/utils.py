@@ -735,7 +735,7 @@ def azure_cognitive_search(query: str, file: dict) -> List[Dict[str, Any]]:
                 # Process search results into the expected format
                 for item in results.get("value", []):
                     # Extract content - assuming there's a content field, adjust as needed
-                    content = item.get("chunk", "")
+                    content = item.get("chunk") if item.get("chunk") else item.get("content", "")
                     documents.append(content)
 
                     title = item.get("title", "Unknown")
