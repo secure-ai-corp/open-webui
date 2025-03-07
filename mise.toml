@@ -1,0 +1,4 @@
+[tools]
+node = "latest"
+ollama = "latest"
+python = "3.11"
