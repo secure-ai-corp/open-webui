@@ -738,7 +738,7 @@ def azure_cognitive_search(query: str, file: dict) -> List[Dict[str, Any]]:
                     content = item.get("chunk") if item.get("chunk") else item.get("content", "")
                     documents.append(content)
 
-                    title = item.get("title", "Unknown")
+                    title = item.get("title", index_name)
                     metadata.append({"source": title, 
                                      "name": title})
                 # If successful, break out of retry loop
